@@ -1,0 +1,16 @@
+services:
+  alpine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: {{ server_name }}
+    image: '{{ template_defaults.image }}'
+    volumes:
+{% for volume in template_defaults.volume_mappings %}
+      - {{ volume }}
+{% endfor %}
+    ports:
+      - "{{ ssh_port | default('2223') }}:22"
+    tty: true
+    stdin_open: true
+    restart: unless-stopped

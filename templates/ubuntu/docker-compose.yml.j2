@@ -1,0 +1,17 @@
+services:
+  ubuntu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: {{ server_name }}
+    image: '{{ template_defaults.image }}'
+    platform: linux/amd64
+    volumes:
+{% for volume in template_defaults.volume_mappings %}
+      - {{ volume }}
+{% endfor %}
+    ports:
+      - "{{ ssh_port | default('2222') }}:22"
+    tty: true
+    stdin_open: true
+    restart: unless-stopped

@@ -1,0 +1,226 @@
+---
+- name: Build Docker Testing Server
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    # Common
+    github_path: "{{ lookup('env', 'GITHUBPATH') }}"
+    ssh_key: "{{ key | default('DIGITALOCEAN_SSH_KEY') }}"
+
+    # This Server
+    repo_name: "ansible_test_lab"
+    server_name: "{{ name | default('ubuntu_server') }}"
+    server_type: "{{ type | default('ubuntu') }}"
+    server_root: "{{ github_path }}/{{ repo_name }}"
+
+    # Servers
+    servers_folder: "instances"
+    servers_path: "{{ server_root }}/{{ servers_folder }}"
+    server_instances_path: "{{ servers_path }}/{{ server_name }}"
+
+    # Templates
+    templates_folder: "templates"
+    templates_path: "{{ server_root }}/{{ templates_folder }}"
+    templates_servers_path: "{{ server_root }}/{{ templates_folder }}/{{ server_type }}"
+    templates_scripts_path: "{{ templates_servers_path }}/scripts"
+
+    # Volumes
+    volumes_folder: "appdata"
+    volumes_path: "{{ server_root }}/{{ volumes_folder }}"
+    server_volumes_path: "{{ volumes_path }}/{{ server_name }}"
+
+  tasks:
+    - name: Check Parameters
+      debug:
+        msg: |
+          - server_name: {{ server_name }}
+          - server_type: {{ server_type }}
+
+    - name: Check Template Exists
+      stat:
+        path: "{{ templates_servers_path }}"
+      register: template_dir
+      failed_when: not template_dir.stat.exists
+
+    - name: Load defaults.yml
+      include_vars:
+        file: "{{ templates_servers_path }}/defaults.yml"
+        name: template_defaults
+      failed_when: false
+
+    - name: Set SSH Port
+      set_fact:
+        ssh_port: "{{ port | default(template_defaults.default_port | default('2222')) }}"
+
+    - name: Check SSH Key Exists
+      stat:
+        path: "~/.ssh/{{ ssh_key }}.pub"
+      register: ssh_key_file
+      failed_when: not ssh_key_file.stat.exists
+      delegate_to: localhost
+
+    - name: Check Docker Running
+      command: docker info
+      register: docker_check
+      failed_when: docker_check.rc != 0
+      changed_when: false
+
+    - name: Check Port {{ ssh_port }} In Use
+      shell: docker ps -a --format "{{ '{{.Names}}' }}" --filter "publish={{ ssh_port }}" | head -1 || true
+      register: port_container
+      changed_when: false
+
+    - name: Check If {{ server_name }} Already Exists
+      command: docker ps -a --filter "name=^{{ server_name }}$" --format "{{ '{{.Names}}' }}"
+      register: container_exists
+      changed_when: false
+
+    - name: Resolve Port Conflict
+      block:
+        - name: Port Conflict Prompt
+          pause:
+            prompt: |
+              Port {{ ssh_port }} is used by container '{{ port_container.stdout }}'
+              Options:
+                1) Replace container (removes '{{ port_container.stdout }}')
+                2) Cancel
+              Enter choice (1 or 2)
+          register: user_choice
+          when: 
+            - port_container.stdout != ""
+            - port_container.stdout != server_name
+
+        - name: Cancel Run
+          fail:
+            msg: "Operation cancelled by user"
+          when: 
+            - user_choice is defined
+            - user_choice.user_input is defined
+            - user_choice.user_input == "2"
+
+    - name: Destroy Container
+      block:
+        - name: Set to Destroy {{ port_container.stdout }}
+          set_fact:
+            container_to_remove: "{{ port_container.stdout }}"
+          when: port_container.stdout != ""
+
+        - name: Stop and Remove {{ container_to_remove }}
+          command: docker-compose down -v
+          args:
+            chdir: "{{ servers_path }}/{{ container_to_remove }}"
+          ignore_errors: yes
+          when: container_to_remove is defined
+
+        - name: Force Remove {{ container_to_remove }}
+          command: docker rm -f {{ container_to_remove }}
+          ignore_errors: yes
+          when: container_to_remove is defined
+
+        - name: Remove Server Directory [{{ container_to_remove }}]
+          file:
+            path: "{{ servers_path }}/{{ container_to_remove }}"
+            state: absent
+          when: container_to_remove is defined
+
+        - name: Remove Volumes for {{ container_to_remove }}
+          file:
+            path: "{{ volumes_path }}/{{ container_to_remove }}"
+            state: absent
+          when: container_to_remove is defined
+
+    - name: Destroy Foreign Container
+      block:
+        - name: Stop and Remove {{ port_container.stdout }}???
+          command: docker-compose down -v
+          args:
+            chdir: "{{ server_instances_path }}"
+          ignore_errors: yes
+          when: 
+            - container_exists.stdout == server_name
+            - container_exists.stdout != port_container.stdout
+
+        - name: Force Remove {{ server_name }}
+          command: docker rm -f {{ server_name }}
+          ignore_errors: yes
+          when: 
+            - container_exists.stdout == server_name
+            - container_exists.stdout != port_container.stdout
+
+        - name: Remove Directories {{ server_instances_path }}
+          file:
+            path: "{{ server_instances_path }}"
+            state: absent
+          when: 
+            - container_exists.stdout == server_name
+            - container_exists.stdout != port_container.stdout
+
+        - name: Remove Volumes {{ server_volumes_path }}
+          file:
+            path: "{{ server_volumes_path }}"
+            state: absent
+          when: 
+            - container_exists.stdout == server_name
+            - container_exists.stdout != port_container.stdout
+
+    - name: Prune Docker Networks
+      command: docker network prune -f
+      changed_when: false
+
+    - name: Get Paths to Volume Directories
+      set_fact:
+        volume_directories: "{{ template_defaults.volume_mappings | 
+          map('regex_replace', '^([^:]+):.*$', '\\1') | 
+          map('replace', '../{{ volumes_folder }}/' + server_name, server_volumes_path) |
+          select('match', '^' + server_volumes_path) | list }}"
+
+    - name: Create All Required Directories  
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ [server_instances_path] + volume_directories }}"
+
+    - name: Copy Dockerfile Scripts to Server Directory
+      copy:
+        src: "{{ templates_scripts_path }}/"
+        dest: "{{ server_instances_path }}/scripts/"
+        mode: '0755'
+
+    - name: Generate Dockerfile From Template
+      template:
+        src: "{{ templates_servers_path }}/Dockerfile.j2"
+        dest: "{{ server_instances_path }}/Dockerfile"
+        mode: '0644'
+
+    - name: Generate docker-compose.yml From Template
+      template:
+        src: "{{ templates_servers_path }}/docker-compose.yml.j2"
+        dest: "{{ server_instances_path }}/docker-compose.yml"
+        mode: '0644'
+
+    - name: Build and Start Container
+      command: docker-compose up -d --build
+      args:
+        chdir: "{{ server_instances_path }}"
+      register: compose_result
+
+    - name: Remove Server Scripts Directory
+      file:
+        path: "{{ templates_scripts_path }}/"
+        state: absent
+
+    - name: Wait for SSH
+      wait_for:
+        port: "{{ ssh_port }}"
+        host: localhost
+        delay: 2
+        timeout: 30
+
+    - name: Display Connection Info
+      debug:
+        msg: 
+          - "Server '{{ server_name }}' (type: {{ server_type }}) is running"
+          - "SSH: ssh -p {{ ssh_port }} root@localhost"
+          - "Using SSH key: ~/.ssh/{{ ssh_key }}.pub"

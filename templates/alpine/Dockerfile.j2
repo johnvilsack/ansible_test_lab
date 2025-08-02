@@ -1,0 +1,27 @@
+FROM {{ template_defaults.image | default('alpine:latest') }}
+
+# Inline Build Commands
+RUN apk update && \
+    apk add --no-cache openssh-server openssh-client sudo python3 py3-pip shadow bash && \
+    mkdir -p /root/.ssh && chmod 700 /root/.ssh && \
+    echo 'root:root' | chpasswd && \
+    ssh-keygen -A && \
+    sed -i 's/#PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config && \
+    sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && \
+    sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config && \
+    echo "export VISIBLE=now" >> /etc/profile
+
+# Inline entrypoint.sh Generation
+RUN printf '#!/bin/sh\n\
+if [ -f /root/.ssh/authorized_keys ]; then\n\
+    chmod 600 /root/.ssh/authorized_keys\n\
+    chown root:root /root/.ssh/authorized_keys\n\
+fi\n\
+exec /usr/sbin/sshd -D -e\n' > /entrypoint.sh && \
+    chmod +x /entrypoint.sh
+
+# Port setup
+EXPOSE 22
+
+# Run entrypoint script every time
+CMD ["/entrypoint.sh"]

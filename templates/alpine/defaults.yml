@@ -1,0 +1,6 @@
+image: alpine:latest
+default_port: 2223
+volume_mappings:
+  - "../{{ volumes_folder }}/{{ server_name }}/home:/home"
+  - "../{{ volumes_folder }}/{{ server_name }}/root:/root"
+  - "~/.ssh/{{ ssh_key | default('id_rsa') }}.pub:/root/.ssh/authorized_keys:ro"

@@ -1,0 +1,27 @@
+1. ansible_test_lab
+   1. playbooks/
+      1. build_host.yml
+   2. templates/
+      1. ubuntu/
+         1. scripts/
+            1. init.sh
+            2. entrypoint.sh
+         2. defaults.yml
+         3. docker-compose.yml.j2
+         4. Dockerfile.j2
+   3. ansible.cfg
+   4. instances/
+      1. ubuntu_server/
+         1. docker-compose.yml
+         2. Dockerfile
+      2. alpine_server/
+         1. docker-compose.yml
+         2. Dockerfile
+      3. appdata/
+         1. ubuntu_server
+            1. home/
+            2. root/
+         2. alpine_server
+            1. home/
+            2. root/
+
