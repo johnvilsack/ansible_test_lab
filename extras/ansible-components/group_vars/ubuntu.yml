@@ -1,0 +1,5 @@
+# Used for templates
+new_user_name: johnv
+ssh_key_file: ~/.ssh/DIGITALOCEAN_SSH_KEY
+
+# output as "{{ new_user_name }}"

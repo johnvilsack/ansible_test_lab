@@ -1,0 +1,9 @@
+    # Shell
+    - name: Echo test message 2
+      ansible.builtin.shell: echo "Connected successfully to $(hostname)"
+      register: echo_result
+      changed_when: false
+
+    - name: Show echo result
+      ansible.builtin.debug:
+        var: echo_result.stdout

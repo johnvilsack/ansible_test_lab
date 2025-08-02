@@ -1,0 +1,48 @@
+- hosts: servers
+  become: yes
+  roles:
+    - common
+    - docker
+    - caddy
+    - apps
+******
+---
+- name: "Harden Server and Deploy Application Stack"
+  hosts: servers
+  roles:
+    - role: hardening
+    - role: docker
+    - role: apps
+
+
+************** zero touch version
+---
+- name: "Play 1: Bootstrap Server as root"
+  hosts: servers
+  gather_facts: no
+  remote_user: root # Explicitly connect as root for this play
+
+  tasks:
+    - name: Create the new non-root user
+      ansible.builtin.user:
+        name: "{{ new_user_name }}"
+        state: present
+        shell: /bin/bash
+        create_home: yes
+        groups: sudo
+
+    - name: Set up SSH key for the new user
+      ansible.posix.authorized_key:
+        user: "{{ new_user_name }}"
+        key: "{{ lookup('file', '~/.ssh/your_public_key.pub') }}" # IMPORTANT: Point to your SSH public key
+        state: present
+
+- name: "Play 2: Harden and Deploy as the new user"
+  hosts: servers
+  remote_user: "{{ new_user_name }}" # Switch to the new user for all subsequent tasks
+  become: yes # Use sudo for privileged operations
+
+  roles:
+    - role: hardening
+    - role: docker
+    - role: apps

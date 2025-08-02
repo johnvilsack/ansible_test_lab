@@ -1,0 +1,86 @@
+---
+- name: Update apt cache and install essential security packages
+  ansible.builtin.apt:
+    name:
+      - ufw
+      - fail2ban
+      - unattended-upgrades
+      - apt-listchanges
+    state: present
+    update_cache: yes
+
+- name: Harden SSH daemon configuration
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    validate: 'sshd -t -f %s'
+  loop:
+    - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+    - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+    - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+    - { regexp: '^#?ChallengeResponseAuthentication', line: 'ChallengeResponseAuthentication no' }
+  notify: Restart SSH
+
+- name: Set UFW default policies to deny incoming and allow outgoing
+  community.general.ufw:
+    direction: "{{ item.direction }}"
+    policy: "{{ item.policy }}"
+  loop:
+    - { direction: 'incoming', policy: 'deny' }
+    - { direction: 'outgoing', policy: 'allow' }
+  notify: Reload UFW
+
+- name: Allow essential traffic through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop:
+    - '22'  # SSH
+    - '80'  # HTTP
+    - '443' # HTTPS
+  notify: Reload UFW
+
+- name: Enable UFW firewall
+  community.general.ufw:
+    state: enabled
+
+- name: Configure unattended-upgrades for automatic security patches
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+          "${distro_id}:${distro_codename}-security";
+      };
+      Unattended-Upgrade::Package-Blacklist {
+      };
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "03:00";
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable and start critical services
+  ansible.builtin.service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - fail2ban
+    - unattended-upgrades
+
+- name: Flush handlers to apply service restarts now
+  meta: flush_handlers
+
+- name: Restart SSH service to apply config changes
+  ansible.builtin.service:
+    name: sshd
+    state: restarted
+  listen: "Restart SSH"
+
+- name: Reload UFW to apply rules
+  ansible.builtin.service:
+    name: ufw
+    state: reloaded
+  listen: "Reload UFW"

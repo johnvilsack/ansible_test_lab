@@ -1,0 +1,9 @@
+    # Commands are better. Less chance of injection
+    - name: Echo a test message
+      ansible.builtin.command: echo "Hello from Ansible"
+      register: echo_result
+      changed_when: false
+
+    - name: Show echo result
+      ansible.builtin.debug:
+        var: echo_result.stdout

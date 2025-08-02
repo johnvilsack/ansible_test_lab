@@ -1,0 +1,46 @@
+---
+- name: Create application directory
+  file:
+    path: /opt/apps
+    state: directory
+
+- name: Create docker-compose.yml
+  template:
+    src: docker-compose.yml.j2
+    dest: /opt/apps/docker-compose.yml
+
+- name: Run docker-compose
+  community.docker.docker_compose:
+    project_src: /opt/apps
+    state: present
+
+************
+
+---
+- name: Create directories for persistent application data
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /opt/n8n_data
+    - /opt/psu_data
+    - /opt/caddy_data
+    - /opt/caddy_config
+    - /opt/app_stack
+
+- name: Template the Caddyfile to the server
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /opt/caddy_config/Caddyfile
+    mode: '0644'
+
+- name: Template the Docker Compose file to the server
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: /opt/app_stack/docker-compose.yml
+    mode: '0644'
+
+- name: Deploy and run the application stack with Docker Compose
+  community.docker.docker_compose_v2:
+    project_src: /opt/app_stack

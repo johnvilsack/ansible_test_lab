@@ -1,0 +1,37 @@
+---
+  - name: Ubuntu Setup
+    hosts: ubuntu_root
+    gather_facts: false
+    tasks:
+      # Commands are better. Less chance of injection
+      - name: Echo a test message
+        ansible.builtin.command: echo "Hello from Ansible"
+        register: echo_result
+        changed_when: false
+
+      - name: Show echo result
+        ansible.builtin.debug:
+          var: echo_result.stdout
+
+      # Commands are better. Less chance of injection
+      - name: Touch
+        ansible.builtin.command: touch ~/foo.txt
+        register: touch_result
+        changed_when: false
+
+      - name: Show touch result
+        ansible.builtin.debug:
+          var: touch_result.stdout
+
+      - name: Ask a branching question
+        pause:
+          prompt: "Do you want to install Docker? (yes/no)"
+        register: docker_prompt
+
+      - name: Set variable based on answer
+        set_fact:
+          install_docker: "{{ docker_prompt.user_input == 'yes' }}"
+
+      - name: Show result variable output
+        debug:
+          var: docker_prompt

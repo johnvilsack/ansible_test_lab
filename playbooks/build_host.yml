@@ -50,8 +50,11 @@
       failed_when: false
 
     - name: Set SSH Port
-      set_fact:
-        ssh_port: "{{ port | default(template_defaults.default_port | default('2222')) }}"
+      block:
+        - set_fact:
+            ssh_port: "{{ port | default(template_defaults.default_port | default('2222')) }}"
+        - debug:
+            msg: "SSH Port: {{ ssh_port }}"
 
     - name: Check SSH Key Exists
       stat:
@@ -182,11 +185,17 @@
         mode: '0755'
       loop: "{{ [server_instances_path] + volume_directories }}"
 
+    - name: Check If Scripts Directory Exists
+      stat:
+        path: "{{ templates_scripts_path }}"
+      register: scripts_dir
+
     - name: Copy Dockerfile Scripts to Server Directory
       copy:
         src: "{{ templates_scripts_path }}/"
         dest: "{{ server_instances_path }}/scripts/"
         mode: '0755'
+      when: scripts_dir.stat.exists and scripts_dir.stat.isdir
 
     - name: Generate Dockerfile From Template
       template:
@@ -206,10 +215,11 @@
         chdir: "{{ server_instances_path }}"
       register: compose_result
 
-    - name: Remove Server Scripts Directory
+    - name: Remove Copied Scripts Directory (cleanup)
       file:
-        path: "{{ templates_scripts_path }}/"
+        path: "{{ server_instances_path }}/scripts"
         state: absent
+      when: scripts_dir.stat.exists and scripts_dir.stat.isdir
 
     - name: Wait for SSH
       wait_for:

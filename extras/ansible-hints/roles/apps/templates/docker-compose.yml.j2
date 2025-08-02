@@ -1,0 +1,74 @@
+version: '3.7'
+
+services:
+  n8n:
+    image: n8nio/n8n
+    container_name: n8n
+    restart: always
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - N8N_HOST=n8n.your_domain.com
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://n8n.your_domain.com/
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+  powershell-universal:
+    image: ironmansoftware/universal:latest
+    container_name: powershell-universal
+    restart: always
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - psu_data:/root/.local/share/universal
+
+volumes:
+  n8n_data:
+  psu_data:
+
+  *******************
+
+  version: '3.8'
+
+services:
+  caddy:
+    image: caddy:latest
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - /opt/caddy_config/Caddyfile:/etc/caddy/Caddyfile
+      - /opt/caddy_data:/data
+      - /opt/caddy_config:/config
+
+  n8n:
+    image: n8nio/n8n
+    container_name: n8n
+    restart: unless-stopped
+    environment:
+      - N8N_HOST=n8n.your-domain.com
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://n8n.your-domain.com/
+    volumes:
+      - /opt/n8n_data:/home/node/.n8n
+    expose:
+      - 5678
+
+  powershell-universal:
+    image: ironmansoftware/universal:latest
+    container_name: powershell-universal
+    restart: unless-stopped
+    volumes:
+      - /opt/psu_data:/root/.local/share/universal
+    expose:
+      - 5000
+
+networks:
+  default:
+    name: app_network

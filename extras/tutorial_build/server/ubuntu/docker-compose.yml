@@ -1,0 +1,17 @@
+services:
+  ubuntu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ubuntu
+    image: 'ubuntu:rolling'
+    platform: linux/amd64
+    volumes:
+      - ../volumes/ubuntu/home:/home
+      - ../volumes/ubuntu/root:/root
+      - ~/.ssh/DIGITALOCEAN_SSH_KEY.pub:/root/.ssh/authorized_keys:ro
+    ports:
+      - "2222:22"
+    tty: true
+    stdin_open: true
+    restart: unless-stopped
