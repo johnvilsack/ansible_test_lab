@@ -21,3 +21,12 @@ Add cloudflared to Docker Compose: Add a new service to your docker-compose.yml.
 Configure Public Hostnames: In the Cloudflare dashboard, configure the public hostnames (e.g., n8n.your-domain.com) to point to the Caddy service (e.g., http://caddy:80).
 Lock Down the Firewall: Once the tunnel is active and routing traffic, you can update your hardening role in Ansible to remove the rules allowing public access on ports 80 and 443, making your server completely inaccessible directly from the internet.
 
+# Vagrant
+May want to look into UTM, parallels or VMWare Fusion for working with Vagrant as opposed to Docker containers.
+
+
+# Docker hardening
+https://github.com/dev-sec/hardening/tree/master/ansible-linux
+
+# Learn Tags
+# Set States
