@@ -1,4 +1,4 @@
 instances/appdata/devhost/root/.cache
 instances/appdata/devhost/root/.cache/motd.legal-displayed
 instances/appdata/devhost/root/.bash_history
-instances/appdata/devhost/root/.ssh/authorized_keys
+instances/appdata/devhost/root/.ssh/authorized_keys.DS_Store
